@@ -1,0 +1,416 @@
+//
+const AV='https://www.habbo.com.br/habbo-imaging/avatarimage';
+const M=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+const CFG={
+  sheet:'1ucvUVFbXDV0z8z6eMuYvSTTXe2LT3UheO_pwQKyfFxw',
+  sheetName:'[DIR] Listagem de Diretores',
+  cargos:['PRESIDENTE','VICE-PRESIDENTE','SECRETÁRIO','DIRETOR'],
+  grupos:{
+    melhores:[5,10,31,3,13],
+    escala:[146],
+    bloqueadas:[268,272],
+    desbloqueadas:[268,272],
+    atividade:[268],
+    atualizacao:[146],
+    avmensal:[268],
+    coleta:[268],
+    abertura:[146],
+  }
+};
+const CP=[{v:'intimacao',l:'[DIR] Carta de Intimação'},{v:'transparencia',l:'[DIR] Carta de Transparência Sindicancial'},{v:'punicao',l:'[DIR] Carta de Punição'},{v:'observacao',l:'[DIR] Carta de Observação'},{v:'avanco',l:'[DIR] Carta de Avanço da Especialização'},{v:'analiseneg',l:'[DIR] Carta de Análise Negada'},{v:'analiseind',l:'[DIR] Carta de Análise Indeferida'},{v:'regresso',l:'[DIR] Regresso de Especialização'},{v:'promocao',l:'[DIR] Promoção'}];
+const CG=[{v:'melhores',l:'[DIR] Melhores da Quinzena'},{v:'escala',l:'[DIR] Escala da Atividade Quinzenal'},{v:'bloqueadas',l:'[DIR] Promoções Bloqueadas'},{v:'desbloqueadas',l:'[DIR] Promoções Desbloqueadas'},{v:'atividade',l:'[DIR] Atividade Quinzenal'},{v:'atualizacao',l:'[DIR] Atualização de Escala de Funções'},{v:'avmensal',l:'[DIR] Avaliação Mensal'},{v:'reuniao',l:'[DIR] Reunião Geral'},{v:'coleta',l:'[DIR] Coleta de Horários'},{v:'abertura',l:'[DIR] Carta de Abertura de Análise'}];
+const SB={intimacao:'[DIR] Carta de Intimação',transparencia:'[DIR] Carta de Transparência Sindicancial',punicao:'[DIR] Carta de Punição',observacao:'[DIR] Carta de Observação',avanco:'[DIR] Carta de Avanço da Especialização',analiseneg:'[DIR] Carta de Análise Negada',analiseind:'[DIR] Carta de Análise Indeferida',regresso:'[DIR] Carta de Regresso de Especialização',promocao:'[DIR] Carta de Promoção',melhores:'[DIR] Melhores da Quinzena',escala:'[DIR] Escala da Atividade Quinzenal',bloqueadas:'[DIR] Promoções Bloqueadas',desbloqueadas:'[DIR] Promoções Desbloqueadas',atividade:'[DIR] Atividade Quinzenal',atualizacao:'[DIR] Atualização de Escala de Funções',avmensal:'[DIR] Avaliação Mensal da Especialização Intermediária',reuniao:'[DIR] Reunião Geral',coleta:'[DIR] Coleta de Horários',abertura:'[DIR] Carta de Abertura de Análise'};
+let NS={},VL=[],APP={},lock=false,mode='p';
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const norm=s=>(s||'').trim().toLowerCase();
+const sanitizeNick=s=>s.replace(/[^\w\-\.]/g,'').trim();
+const fmtD=v=>{if(!v)return'—';const d=new Date(v+'T12:00:00');return`${String(d.getDate()).padStart(2,'0')} ${M[d.getMonth()]} ${d.getFullYear()}`;};
+const addD=(v,n)=>{const d=new Date(v+'T12:00:00');d.setDate(d.getDate()+n);return d;};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const gR=name=>(document.querySelector(`input[name="${name}"]:checked`)||{}).value||'';
+const gRG=gid=>(document.querySelector(`#${gid} .ro.on input`)||{}).value||'';
+function toast(m,t=''){const e=$('#T');e.textContent=m;e.className='toast on '+t;clearTimeout(e._h);e._h=setTimeout(()=>{e.className='toast';},3000);}
+function rsel(gid,el){document.querySelectorAll(`#${gid} .ro`).forEach(o=>o.classList.remove('on'));el.classList.add('on');}
+function togAdv(){const t=gR('tippun');const h=['advertência interna','advertência verbal','advertência escrita'].includes(t);$('#sec-adv').style.display=h?'block':'none';if(h)updFim();}
+function updFim(){const v=$('#f-dtadv').value;if(!v){$('#fh-fim').textContent='Término: — (30 dias corridos)';return;}const f=addD(v,30);$('#fh-fim').textContent=`Término: ${fmtD(f.toISOString().slice(0,10))} (30 dias corridos)`;}
+function togLinkReg(){$('#sec-linkreg').style.display=gR('origreg')==='outro'?'block':'none';}
+async function pegarUsername(){try{const r=await fetch('/forum',{cache:'no-store',credentials:'include'});const h=await r.text();const m=h.match(/_userdata\["username"\]\s*=\s*"([^"]+)"/);return m&&m[1]?m[1]:null;}catch{return null;}}
+async function buscarCargo(nick){const url=`https://docs.google.com/spreadsheets/d/${CFG.sheet}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(CFG.sheetName)}`;const r=await fetch(url,{cache:'no-store'});const txt=await r.text();const json=JSON.parse(txt.substring(txt.indexOf('{'),txt.lastIndexOf('}')+1));for(const row of(json.table.rows||[])){const c=row.c||[];if(norm((c[2]&&c[2].v!=null?String(c[2].v):''))===norm(nick))return c[1]&&c[1].v!=null?String(c[1].v).trim():'';}return null;}
+async function bootstrap(){$('#LS').textContent='Identificando usuário';const u=await pegarUsername();if(!u)return block('Não foi possível identificar você no fórum.');APP.username=u;$('#LS').textContent='Validando cargo';let cargo=null;try{cargo=await buscarCargo(u);}catch{return block('Erro ao consultar planilha.');}if(!cargo)return block(`"${u}" não encontrado na listagem.`);if(!CFG.cargos.some(c=>cargo.toUpperCase().includes(c)))return block(`Cargo "${cargo}" sem permissão.`);APP.cargo=cargo;showApp(u,cargo);}
+function block(r){$('#L').classList.add('hide');$('#BR').textContent=r;$('#BL').classList.add('show');}
+function showApp(u,cargo){$('#UA').src=`${AV}?img_format=png&user=${encodeURIComponent(u)}&direction=2&head_direction=2&size=m&headonly=1`;$('#UN').textContent=u;$('#UR').textContent=cargo;$('#L').classList.add('hide');setTimeout(()=>$('#L').style.display='none',550);$('#W').classList.add('rdy');}
+function setMode(m){mode=m;$('#tbP').classList.toggle('on',m==='p');$('#tbG').classList.toggle('on',m==='g');popSel();hidePanels();$('#CS').value='';}
+function popSel(){const s=$('#CS');s.innerHTML='<option value="">— Escolha uma carta —</option>';(mode==='p'?CP:CG).forEach(c=>{const o=document.createElement('option');o.value=c.v;o.textContent=c.l;s.appendChild(o);});}
+function hidePanels(){document.querySelectorAll('.panel').forEach(p=>p.classList.remove('on'));document.querySelectorAll('.prog').forEach(p=>p.classList.remove('on'));}
+function selCarta(){const v=$('#CS').value;hidePanels();if(!v)return;const p=$(`#${v}`);if(p)p.classList.add('on');if(v==='analiseind'&&VL.length===0)addVoto();}
+function nAddBulk(form,raw){raw.split('/').map(s=>sanitizeNick(s)).filter(Boolean).forEach(n=>{if(!NS[form])NS[form]=[];if(!NS[form].find(x=>norm(x)===norm(n))){NS[form].push(n);}});renderPills(form);}
+function nkey(e,form){if(e.key==='Enter'){e.preventDefault();const v=e.target.value.trim();if(v){nAddBulk(form,v);e.target.value='';}}}
+function nai(e,form){const v=e.target.value;if(v.endsWith('/')){const p=v.slice(0,-1).trim();if(p)nAddBulk(form,p);e.target.value='';}}
+function remPill(form,nick){if(NS[form])NS[form]=NS[form].filter(n=>norm(n)!==norm(nick));renderPills(form);}
+function renderPills(form){const c=$(`#p-${form}`);if(!c)return;c.innerHTML='';(NS[form]||[]).forEach(nick=>{const d=document.createElement('div');d.className='pill';const av=`${AV}?img_format=png&user=${encodeURIComponent(nick)}&direction=2&head_direction=2&size=m&headonly=1`;d.innerHTML=`<div class="pav"><img src="${av}" loading="lazy"></div><span class="pnm">${esc(nick)}</span><button class="prm" onclick="remPill('${form}','${nick.replace(/'/g,"\\'")}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`;c.appendChild(d);});}
+function addVoto(){VL.push({id:Date.now(),dir:'',tipo:'deferido',com:''});renderVotos();}
+function remVoto(id){VL=VL.filter(v=>v.id!==id);renderVotos();}
+function renderVotos(){const c=$('#votos-list');if(!c)return;c.innerHTML='';VL.forEach((v,i)=>{const d=document.createElement('div');d.className='vb';d.innerHTML=`<div class="vr"><input class="ni" style="flex:1;min-width:110px" placeholder="Nickname do Diretor" value="${esc(v.dir)}" oninput="VL[${i}].dir=this.value"><div style="display:flex;gap:5px"><button class="vt${v.tipo==='deferido'?' vg':''}" onclick="VL[${i}].tipo='deferido';renderVotos()">✓ Deferido</button><button class="vt${v.tipo==='indeferido'?' vr2':''}" onclick="VL[${i}].tipo='indeferido';renderVotos()">✗ Indeferido</button></div><button class="prm" onclick="remVoto(${v.id})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div><textarea class="ni" style="width:100%;min-height:52px;resize:vertical" placeholder="Comentário…" oninput="VL[${i}].com=this.value">${esc(v.com)}</textarea>`;c.appendChild(d);});}
+function clr(form){NS[form]=[];renderPills(form);const p=$(`#${form}`);if(p)p.querySelectorAll('input:not([type=radio]),textarea').forEach(el=>el.value='');if(form==='analiseind'){VL=[];renderVotos();}const pg=$(`#pg-${form}`);if(pg){pg.classList.remove('on');$(`#lg-${form}`).innerHTML='';$(`#sm-${form}`).classList.remove('on');}}
+function gH(title){return`[table  style="overflow: hidden; border-radius: 10px; width: 100%; margin: 0px auto; z-index: 1; position: relative;"][tr style="border: none !important;"][td style="border: none !important; padding: 1px; width: 100%;" bgcolor="#080D01"][table  style="overflow: hidden; border-radius: 10px; width: 100%; font-family Poppins; font-size: 14px;"][tr style="border: none !important;"][td style="border: none !important; padding: 0px; width: 100%;" bgcolor="#4C8613"][img]https://i.imgur.com/Ewasqzu.png[/img][/td][/tr][tr style="border: none !important;"][td style="border: none !important; padding: 5px; width: 100%;" bgcolor="#165519"][table  style="overflow: hidden; border-radius: 150px; width: 60%; margin: 0 auto; margin-top: -40px; z-index: 2; position: relative;"][tr style="border: none !important;"][td style="border: none !important; padding: 0px; width: 100%;" bgcolor="#080D01"][table  style="overflow: hidden; border-radius: 10px"][tr style="border: none !important;"][td style="border: none !important; padding: 3px; width: 100%;" bgcolor="#247411"][size=20][b][font=Poppins][color=#F0F0F0]${title}[/color][/font][/b][/size][/td][/tr][/table][/td][/tr][/table][table  style="overflow: hidden; border-radius: 10px;  width: 100%; margin: 0 auto; margin-top: -20px; z-index: 1; position: relative;"][tr style="border: none !important;"][td style="border: none !important; padding: 0px; width: 100%;" bgcolor="#080D01"][table  style="overflow: hidden; border-radius: 10px; width: 100%;"][tr style="border: none !important;"][td style="border: none !important; padding-top: 30px!important; padding-bottom: 0px; width: 100%;" bgcolor="#041600"]`;}
+function gF(){return`\n[color=white][font=Poppins][color=#4b8410]<i class="fas fa-code"></i>[/color] por [b]Aloscon[/b] | Todos os direitos reservados à [b]Diretoria do Corpo Executivo[/b].[/font][/color]\n\n[/td][/tr][/table][/td][/tr][/table][/td][/tr][/table][/td][/tr][/table]`;}
+function gS(nick){return`[color=white][font=Poppins][justify][center]Saudações, [color=#65b026][b]${nick}[/b][/color]\n[table style="width: 20%; border-radius: 10px;border: none!important; overflow: hidden; line-height: 1em; margin-top:0.6em" bgcolor="#65b026"][tr style="overflow: hidden; border: none !important;"][td style="border: none!important; overflow: hidden;  padding: 1px"][/td][/tr][/table][/center]\n\n`;}
+function buildBB(form,nick){
+const h=gH,s=gS,f=gF;
+switch(form){
+case 'intimacao':{
+const tipo=gR('tipint'),mot=$('#f-motint').value.trim();
+return h('CARTA DE INTIMAÇÃO')+s(nick)+`Por meio desta mensagem privada, Informo-lhe, através desta intimação, que foi aberta uma [b][color=#65b026]${tipo}[/color][/b] pelos motivos expostos abaixo. Sendo assim, você tem o prazo de [b][color=#65b026]24 horas[/color][/b] a partir do recebimento desta intimação para enviar sua defesa, caso queira. Em caso de o intimado encontrar-se em licença no momento do recebimento desta intimação, o prazo para resposta será de [b][color=#65b026]24 horas, contadas a partir de seu retorno da licença[/color][/b]. Havendo dúvidas, procure a Presidência da Diretoria do Corpo Executivo.[/justify][/font][/color]
+
+[table  style="z-index: 99; margin-top: -55px; top: 40px; right: -20px;  position: relative; font-weight: 500; border-radius: 150px; width: 40%; float: left; overflow: hidden;" bgcolor="#1a560c"][tr][td style="overflow: hidden; padding: 2%"][font=Poppins][color=#FFFFFF][b]EXPOSIÇÃO DO CASO[/b][/color][/font][/td][/tr][/table][table  style="overflow: hidden; border-radius: 10px; width: 100%; margin: 0px auto; z-index: 1; position: relative;"][tr style="border: none !important;"][td style="border: none !important; padding: 1px; width: 100%;" bgcolor="#1a560c"][table  style="padding-top: 10px; font-weight: 500; border-radius: 10px 10px 10px 10px; width: 100%; overflow: hidden;" bgcolor="#162612"][tr][td style="overflow: hidden; padding-top: 35px;"][color=white][justify][font=Poppins][spoiler=${tipo}]${mot}[/spoiler][/font][/justify][/color][/td][/tr][/table][/td][/tr][/table]`+f();}
+
+case 'transparencia':{
+const ap=$('#f-apelante').value.trim(),cod=$('#f-codigo').value.trim(),reus=$('#f-reus').value.trim(),res=gR('restransp'),ac=$('#f-acusacao').value.trim(),def=$('#f-defesa').value.trim(),fund=$('#f-fundtransp').value.trim();
+return h('CARTA DE TRANSPARÊNCIA SINDICANCIAL')+s(nick)+`Por meio desta mensagem privada, informo-lhe, por meio desta carta, que a sindicância requerida por [b][color=#65b026]${ap}[/b][/color], na qualidade de apelante, sob o código de identificação [b][color=#65b026]${cod}[/b][/color], tendo como réu(s) [b][color=#65b026]${reus}[/b][/color], foi devidamente analisada. Após apreciação, a Diretoria do Corpo Executivo, por decisão do colegiado, deliberou pelo [b][color=#65b026]${res}[/b][/color] da solicitação.
+
+[spoiler=Corpo de acusação]${ac}[/spoiler]
+
+[spoiler=Corpo de defesa]${def}[/spoiler]
+
+Se uma das ambas partes não estiver satisfeita com o parecer, você poderá interpor recurso à segunda instância, acessando o tópico [b][color=#65b026][url=https://www.policiarcc.com/t34967-cor-protocolamento-de-recursos][b][color=#65b026][COR] Protocolamento de Recursos[/b][/color][/url][/b][/color].[/justify][/font][/color]
+
+[table  style="z-index: 99; margin-top: -55px; top: 40px; right: -20px;  position: relative; font-weight: 500; border-radius: 150px; width: 40%; float: left; overflow: hidden;" bgcolor="#1a560c"][tr][td style="overflow: hidden; padding: 2%"][font=Poppins][color=#FFFFFF][b]FUNDAMENTAÇÃO DO COLEGIADO[/b][/color][/font][/td][/tr][/table][table  style="overflow: hidden; border-radius: 10px; width: 100%; margin: 0px auto; z-index: 1; position: relative;"][tr style="border: none !important;"][td style="border: none !important; padding: 1px; width: 100%;" bgcolor="#1a560c"][table  style="padding-top: 10px; font-weight: 500; border-radius: 10px 10px 10px 10px; width: 100%; overflow: hidden;" bgcolor="#162612"][tr][td style="overflow: hidden; padding-top: 35px;"][color=white][justify][font=Poppins]${fund}[/font][/justify][/color][/td][/tr][/table][/td][/tr][/table]`+f();}
+
+case 'punicao':{
+const tipo=gR('tippun'),crime=$('#f-crime').value.trim(),fund=$('#f-fundpun').value.trim(),link=$('#f-linkpun').value.trim();
+const quad=tipo==='advertência interna'?'[DIR] Quadro de Advertências':tipo==='advertência verbal'?'[CE] Quadro de Advertências':'RCCSystem';
+const hasAdv=['advertência interna','advertência verbal','advertência escrita'].includes(tipo);
+let prazoTxt='';
+if(hasAdv){const dv=$('#f-dtadv').value;if(dv){const fim=addD(dv,30);prazoTxt=` A sua ${tipo} possui o prazo de 30 (trinta) dias, contando de [b][color=#65b026]${fmtD(dv)}[/b][/color] a [b][color=#65b026]${fmtD(fim.toISOString().slice(0,10))}[/b][/color].`;}}
+const lnkB=link&&link!=='-x-'?`\n[url=${link}][table  style="z-index: 99;margin-top: -53px;top: 10px;right: 30px;position: relative;font-weight: 500;border-radius: 150px;width: 40%;float: right;overflow: hidden;" bgcolor="#247411"][tr][td style="overflow: hidden;padding: 4%;"][font=Poppins][color=white][b]ANEXOS[/b][/color][/font][/td][/tr][/table][/url]`:'';
+return h('CARTA DE PUNIÇÃO')+s(nick)+`Por meio desta Mensagem Privada, informo-lhe que recebeu [b][color=#65b026]${tipo}[/b][/color] no [b][color=#65b026]${quad}[/b][/color] devido ao crime de [b][color=#65b026]${crime}[/b][/color]. Quaisquer dúvidas ou vindicações, procure a Presidência da Diretoria do Corpo Executivo.${prazoTxt} Apresenta-se, a seguir, a fundamentação que ensejou a aplicação da penalidade junto com os anexos de comprovação.[/justify][/font][/color]
+
+[table  style="z-index: 99; margin-top: -55px; top: 40px; right: -20px;  position: relative; font-weight: 500; border-radius: 150px; width: 40%; float: left; overflow: hidden;" bgcolor="#1a560c"][tr][td style="overflow: hidden; padding: 2%"][font=Poppins][color=#FFFFFF][b]FUNDAMENTAÇÃO DA PUNIÇÃO[/b][/color][/font][/td][/tr][/table][table  style="overflow: hidden; border-radius: 10px; width: 100%; margin: 0px auto; z-index: 1; position: relative;"][tr style="border: none !important;"][td style="border: none !important; padding: 1px; width: 100%;" bgcolor="#1a560c"][table  style="padding-top: 10px; font-weight: 500; border-radius: 10px 10px 10px 10px; width: 100%; overflow: hidden;" bgcolor="#162612"][tr][td style="overflow: hidden; padding-top: 35px;"][color=white][justify][font=Poppins]${fund}[/font][/justify][/color][/td][/tr][/table][/td][/tr][/table]${lnkB}`+f();}
+
+case 'observacao':
+return h('CARTA DE OBSERVAÇÃO')+s(nick)+`Por meio desta Mensagem Privada, informo-lhe que, conforme a avaliação realizada, foi atribuído a você o [b][color=#65b026]veredito de observação[/b][/color], seja por prevalência ou por maioria. Em decorrência desse veredito, sua promoção encontra-se [b][color=#65b026]bloqueada pelo prazo de 07 (sete) dias[/b][/color], contados a partir da data desta Mensagem Privada.
+
+Durante esse período, você deverá ser acompanhado por um [b][color=#65b026]membro do Esquadrão do Corpo Executivo ou da Diretoria do Corpo Executivo[/b][/color], devendo, para tanto, você entrar em contato com um de membros desses grupos de tarefas mencionados.
+
+Caso não deseje o acompanhamento, este é um direito seu. No entanto, ficará sob sua responsabilidade resolver os pontos em déficit indicados na avaliação. Se não concordar com alguma nota, comentário ou com o próprio veredito, você poderá interpor recurso, acessando a [url=https://www.policiarcc.com/t38726-ce-central-de-sindicancias][b][color=#65b026][CE] Central de Sindicâncias.[/b][/color][/url][/justify][/font][/color]`+f();
+
+case 'avanco':{
+const tipo=gR('tipav');
+if(tipo==='INTERMEDIÁRIA') return h('CARTA DE AVANÇO DA ESPECIALIZAÇÃO')+s(nick)+`Por meio desta Mensagem Privada, informo-lhe que o(a) parabenizamos pelo seu avanço da especialização para a [b][color=#65b026]Especialização Intermediária[/b][/color].
+
+Ao ser adicionado ao subfórum [b][color=#65b026][Corpo Executivo] Corpo de Oficiais[/b][/color], deverá realizar, obrigatoriamente, a leitura dos seguintes tópicos: [b][color=#65b026][CE] Código de Conduta das Especializações[/b][/color] e [b][color=#65b026][CE] Regulamento de Avaliações[/b][/color], localizado em [b][color=#65b026][Corpo Executivo] Central de Documentações e Manuais[/b][/color], devendo também, caso possua cargo de superintendente ou superior, ler o [b][color=#65b026][CE] Manual de Transferência de Conta[/b][/color], ressaltando-se que, a partir desse momento, você passará a assumir maiores responsabilidades, entre elas:
+[table style="width: 20px; display: math; position: relative; border-radius: 5px; border: none!Important; padding-top: 12px; top: 8px;" bgcolor="#65b026"][tr style="border: none!Important; overflow: hidden;"][td style="border:  none!Important; overflow: hidden;"][color=white][b]01[/b][/color][/td][/tr][/table] Manter seus turnos e tarefas atualizados, sob pena de advertência escrita, caso não atualize em até 48 horas;
+[table style="width: 20px; display: math; position: relative; border-radius: 5px; border: none!Important; padding-top: 12px; top: 8px;" bgcolor="#65b026"][tr style="border: none!Important; overflow: hidden;"][td style="border:  none!Important; overflow: hidden;"][color=white][b]02[/b][/color][/td][/tr][/table] Manter presença em base, bom conhecimento sobre os documentos, pulso firme, rigidez, boa ortografia, postura, ajudar e gratificar seus subalternos, como todo e qualquer bom oficial;
+[table style="width: 20px; display: math; position: relative; border-radius: 5px; border: none!Important; padding-top: 12px; top: 8px;" bgcolor="#65b026"][tr style="border: none!Important; overflow: hidden;"][td style="border:  none!Important; overflow: hidden;"][color=white][b]03[/b][/color][/td][/tr][/table] Ao promover, conferir corretamente os requisitos do promovido e, caso necessite, deter da permissão para tal;
+[table style="width: 20px; display: math; position: relative; border-radius: 5px; border: none!Important; padding-top: 12px; top: 8px;" bgcolor="#65b026"][tr style="border: none!Important; overflow: hidden;"][td style="border:  none!Important; overflow: hidden;"][color=white][b]04[/b][/color][/td][/tr][/table] Acompanhar os resultados da [b]Avaliação Mensal[/b] em [url=https://www.policiarcc.com/t31688-diario-oficial-diretoria-central-de-avaliacoes][b][color=green][Diário Oficial] - Diretoria: Avaliações[/color][/b][/url] para manter-se nos padrões adequados da hierarquia;
+[table style="width: 20px; display: math; position: relative; border-radius: 5px; border: none!Important; padding-top: 12px; top: 8px;" bgcolor="#65b026"][tr style="border: none!Important; overflow: hidden;"][td style="border:  none!Important; overflow: hidden;"][color=white][b]05[/b][/color][/td][/tr][/table] Não passar mais de 72 horas offline sem um pedido de licença da especialização no RCCSystem em: [url=https://system.policercc.com.br/especializacao/postagens][b][color=#65b026]Corpo Executivo > Postagem: Especialização[/color][/b][/url].[/justify][/font][/color]
+
+[table  style="z-index: 99;margin-top: -56px;top: 41px;right: -20px;position: relative;font-weight: 500;border-radius: 150px;width: 40%;float: left;overflow: hidden;" bgcolor="#1a560c"][tr][td style="overflow: hidden; padding: 2%"][font=Poppins][color=#FFFFFF][b]GRUPO DE COMUNICAÇÃO[/b][/color][/font][/td][/tr][/table][table  style="overflow: hidden; border-radius: 10px; width: 100%; margin: 0px auto; z-index: 1; position: relative;"][tr style="border: none !important;"][td style="border: none !important; padding: 1px; width: 100%;" bgcolor="#1a560c"][table  style="padding-top: 10px; font-weight: 500; border-radius: 10px 10px 10px 10px; width: 100%; overflow: hidden;" bgcolor="#162612"][tr][td style="overflow: hidden; padding-top: 35px;"][color=white][justify][font=Poppins]Atualmente, a Especialização Intermediária, dispõe de um grupo no WhatsApp, sendo gerenciado pela Diretoria do Corpo Executivo, para estimular a comunicação entre os oficiais sobre os assuntos pertinentes à instituição, de exemplo, é comum haver debates em base das palestras, dos acompanhamentos e outrem realizados por outros policiais. É importante que o portador saiba explorar esse grupo para exercer a comunicatividade e o interesse no que envolve sobre a polícia. Para entrar nesse grupo, o convite está disposto abaixo.[/font][/justify][/color][/td][/tr][/table][/td][/tr][/table]
+[url=https://chat.whatsapp.com/HXdoHcxmn1PEVfqxJieOO6][table  style="z-index: 99;margin-top: -53px;top: 10px;right: 30px;position: relative;font-weight: 500;border-radius: 150px;width: 40%;float: right;overflow: hidden;" bgcolor="#247411"][tr][td style="overflow: hidden;padding: 4%;"][font=Poppins][color=white][b]ENTRE NO GRUPO![/b][/color][/font][/td][/tr][/table][/url]
+[table  style="z-index: 99;margin-top: -56px;top: 60px;right: -20px;position: relative;font-weight: 500;border-radius: 150px;width: 40%;float: left;overflow: hidden;" bgcolor="#1a560c"][tr][td style="overflow: hidden; padding: 2%"][font=Poppins][color=#FFFFFF][b]ATIVIDADES QUINZENAIS[/b][/color][/font][/td][/tr][/table]
+[table  style="overflow: hidden; border-radius: 10px; width: 100%; margin: 0px auto; z-index: 1; position: relative;"][tr style="border: none !important;"][td style="border: none !important; padding: 1px; width: 100%;" bgcolor="#1a560c"][table  style="padding-top: 10px; font-weight: 500; border-radius: 10px 10px 10px 10px; width: 100%; overflow: hidden;" bgcolor="#162612"][tr][td style="overflow: hidden; padding-top: 35px;"][color=white][justify][font=Poppins]A Diretoria do Corpo Executivo organiza atividades voltadas para o aperfeiçoamento dos portadores da especialização intermediária, como resoluções de casos, discussões e outras dinâmicas inovadoras. A data e horário das atividades são previamente notificadas por mensagem privada. Essas atividades são [b]obrigatórias[/b] e, portanto, a sua participação é indispensável.
+
+No entanto, caso não possa comparecer, é necessário justificar a ausência utilizando o formulário disponibilizado pelo órgão, o qual deve ser respondido num prazo de 24 horas a partir do horário inicial da atividade. Faltas não justificadas resultarão em advertência escrita por Abandono de Dever/Negligência.[/font][/justify][/color][/td][/tr][/table][/td][/tr][/table]
+[table  style="z-index: 99;margin-top: -56px;top: 60px;right: -20px;position: relative;font-weight: 500;border-radius: 150px;width: 40%;float: left;overflow: hidden;" bgcolor="#1a560c"][tr][td style="overflow: hidden; padding: 2%"][font=Poppins][color=#FFFFFF][b]AVALIAÇÕES MENSAIS E CADASTRO[/b][/color][/font][/td][/tr][/table]
+[table  style="overflow: hidden; border-radius: 10px; width: 100%; margin: 0px auto; z-index: 1; position: relative;"][tr style="border: none !important;"][td style="border: none !important; padding: 1px; width: 100%;" bgcolor="#1a560c"][table  style="padding-top: 10px; font-weight: 500; border-radius: 10px 10px 10px 10px; width: 100%; overflow: hidden;" bgcolor="#162612"][tr][td style="overflow: hidden; padding-top: 35px;"][color=white][justify][font=Poppins]A Diretoria do Corpo Executivo realiza, a cada mês, a avaliação mensal dos portadores da especialização intermediária. Nessa avaliação, você será avaliado conforme o cumprimento dos requisitos estabelecidos no [b][CE] Regulamento de Avaliações[/b] em [Corpo Executivo] Central de Documentações e Manuais, cuja documentação estará disponível quando adicionada ao subfórum.
+
+Além disso, superiores hierárquicos da especialização intermediária também podem avaliar seus subalternos, caso desejam e cumprir os requisitos. Para isso, basta acessar o tópico [b][CE] Cadastro ao Sistema de Avaliações[/b], localizado no subfórum [Corpo Executivo] Central de Avaliações dentro do fórum [Corpo Executivo] Corpo de Oficiais.[/font][/justify][/color][/td][/tr][/table][/td][/tr][/table]
+[table  style="z-index: 99;margin-top: -56px;top: 60px;right: -20px;position: relative;font-weight: 500;border-radius: 150px;width: 40%;float: left;overflow: hidden;" bgcolor="#1a560c"][tr][td style="overflow: hidden; padding: 2%"][font=Poppins][color=#FFFFFF][b]FICHAMENTO POLICIAL[/b][/color][/font][/td][/tr][/table]
+[table  style="overflow: hidden; border-radius: 10px; width: 100%; margin: 0px auto; z-index: 1; position: relative;"][tr style="border: none !important;"][td style="border: none !important; padding: 1px; width: 100%;" bgcolor="#1a560c"][table  style="padding-top: 10px; font-weight: 500; border-radius: 10px 10px 10px 10px; width: 100%; overflow: hidden;" bgcolor="#162612"][tr][td style="overflow: hidden; padding-top: 35px;"][color=white][justify][font=Poppins]Você [b]deve[/b] realizar seu [b]fichamento policial[/b] em até [b]48 horas[/b] a contar do recebimento desta Mensagem Privada, sob pena de [b]advertência escrita[/b] por [b]Abandono de Dever/Negligência[/b], caso não o faça. Para realizá-lo, [url=https://www.policiarcc.com/t36126-csi-fichamento-policial][b][color=white]clique aqui[/color][/b][/url].[/font][/justify][/color][/td][/tr][/table][/td][/tr][/table]`+f();
+return h('CARTA DE AVANÇO DA ESPECIALIZAÇÃO')+s(nick)+`Por meio desta Mensagem Privada, informo-lhe que o(a) parabenizamos pelo seu avanço da especialização para a [b][color=#65b026]Especialização Avançada[/b][/color] e consequentemente entrar na [b][color=#65b026]Diretoria do Corpo Executivo[/b][/color].
+
+Essa conquista representa o reconhecimento pela sua dedicação, competência e comprometimento com a excelência do Corpo Executivo. Quando for adicionado ao subfórum [b][color=#65b026][Corpo Executivo] Diretoria.[/b][/color], deverá ler os tópicos [b][color=#65b026][DIR] Regimento Interno[/b][/color] e [b][color=#65b026][DIR] Procedimentos de Análises.[/b][/color], além dos manuais em [b][color=#65b026][DIR] Central de Manuais[/b][/color].
+
+A partir deste momento, além de manter os deveres e privilégios da especialização intermediária, você assume novas e importantes responsabilidades:
+[table style="width: 20px; display: math; position: relative; border-radius: 5px; border: none!Important; padding-top: 12px; top: 8px;" bgcolor="#65b026"][tr style="border: none!Important; overflow: hidden;"][td style="border:  none!Important; overflow: hidden;"][color=white][b]01[/b][/color][/td][/tr][/table] Possui o poder e o dever de avaliar mensalmente os executivos com Especialização Intermediária do seu turno;
+[table style="width: 20px; display: math; position: relative; border-radius: 5px; border: none!Important; padding-top: 12px; top: 8px;" bgcolor="#65b026"][tr style="border: none!Important; overflow: hidden;"][td style="border:  none!Important; overflow: hidden;"][color=white][b]02[/b][/color][/td][/tr][/table] Deve responder às análises de avanço abertas para a Especialização Intermediária do seu turno;
+[table style="width: 20px; display: math; position: relative; border-radius: 5px; border: none!Important; padding-top: 12px; top: 8px;" bgcolor="#65b026"][tr style="border: none!Important; overflow: hidden;"][td style="border:  none!Important; overflow: hidden;"][color=white][b]03[/b][/color][/td][/tr][/table] Tem autonomia para promover praças e oficiais de ambos os corpos, sem necessidade de permissão;[/justify][/font][/color]
+
+[table  style="z-index: 99;margin-top: -56px;top: 41px;right: -20px;position: relative;font-weight: 500;border-radius: 150px;width: 40%;float: left;overflow: hidden;" bgcolor="#1a560c"][tr][td style="overflow: hidden; padding: 2%"][font=Poppins][color=#FFFFFF][b]GRUPO DE COMUNICAÇÃO[/b][/color][/font][/td][/tr][/table][table  style="overflow: hidden; border-radius: 10px; width: 100%; margin: 0px auto; z-index: 1; position: relative;"][tr style="border: none !important;"][td style="border: none !important; padding: 1px; width: 100%;" bgcolor="#1a560c"][table  style="padding-top: 10px; font-weight: 500; border-radius: 10px 10px 10px 10px; width: 100%; overflow: hidden;" bgcolor="#162612"][tr][td style="overflow: hidden; padding-top: 35px;"][color=white][justify][font=Poppins]Atualmente, a Diretoria, dispõe de um grupo no WhatsApp, sendo gerenciado pela Presidência da Diretoria do Corpo Executivo, para estimular a comunicação entre os oficiais sobre os assuntos pertinentes à instituição. Para entrar nesse grupo, o convite está disposto abaixo.[/font][/justify][/color][/td][/tr][/table][/td][/tr][/table]
+[url=https://chat.whatsapp.com/IyRlu91rTPeBQnLRRdFZ1S][table  style="z-index: 99;margin-top: -40px;top: 10px;right: 30px;position: relative;font-weight: 500;border-radius: 150px;width: 40%;float: right;overflow: hidden;" bgcolor="#247411"][tr][td style="overflow: hidden;padding: 4%;"][font=Poppins][color=white][b]ENTRE NO GRUPO![/b][/color][/font][/td][/tr][/table][/url]
+[table  style="z-index: 99;margin-top: -56px;top: 60px;right: -20px;position: relative;font-weight: 500;border-radius: 150px;width: 40%;float: left;overflow: hidden;" bgcolor="#1a560c"][tr][td style="overflow: hidden; padding: 2%"][font=Poppins][color=#FFFFFF][b]AVALIAÇÕES MENSAIS E ANÁLISES DE AVANÇO[/b][/color][/font][/td][/tr][/table]
+[table  style="overflow: hidden; border-radius: 10px; width: 100%; margin: 0px auto; z-index: 1; position: relative;"][tr style="border: none !important;"][td style="border: none !important; padding: 1px; width: 100%;" bgcolor="#1a560c"][table  style="padding-top: 10px; font-weight: 500; border-radius: 10px 10px 10px 10px; width: 100%; overflow: hidden;" bgcolor="#162612"][tr][td style="overflow: hidden; padding-top: 35px;"][color=white][justify][font=Poppins]A utilização de sua visão administrativa procura a identificação e a resolução de erros. Sendo assim, é necessário ter a percepção necessária para identificar as problemáticas, além disso, a capacidade necessária, através de sua proatividade, para resolvê-los da maneira correta, embasando suas decisões com os argumentos precisos. Logo, entende-se que, para utilizar a sua visão administrativa corretamente, é necessária uma avaliação minuciosa de seus subalternos, o desempenho apresentado por estes em todas as características necessárias.
+
+De início, a fim de explorar e potencializar a sua visão administrativa e resolução de casos, a polícia conta com as avaliações mensais da Diretoria do Corpo Executivo, além das análises de avanço, onde deve avaliar o desempenho de seus subalternos ao longo do mês, enfatizando os pontos a serem melhorados e, corrigindo-os através da manutenção do Corpo. Neste prisma, um dos pontos fundamentais para a execução correta de sua avaliação ao longo do mês, é a organização dos dados expostos pelos seus subalternos, como: funções assumidas, atividades realizadas, promoções, gratificações e demais observações.
+
+A organização pode ser feita através de uma planilha com as características, provas e observações coletadas ou, por meio de um documento, onde deve adicionar/modificar/remover as informações necessárias. Além disso, a motivação para a organização é pautada na sua responsabilidade como superior na especialização, você é quem deve dar o feedback, suporte e ferramentas necessárias para o desenvolvimento de seu subalterno.
+
+E como faria isso sem se organizar? Portanto, utilize da organização dos fatos expostos pelos seus subalternos para uma avaliação precisa, justa e com suas opiniões transparecidas com embasamento de argumentos. Após a sua avaliação, converse com os seus subordinados para ter certeza de que entenderam os pontos supracitados por você acerca do trabalho apresentado por eles durante o mês. Em casos de maiores dificuldades observadas, apresente a sua visão administrativa para realizar atividades que potencializam e desenvolvem os seus subalternos sobre a característica em que apresentaram mau desempenho.
+
+Portanto, a avaliação de subalternos é um ponto principal para ser exercido pelos membros da Especialização Avançada, uma vez que são um dos responsáveis pela manutenção do Corpo Executivo, devem estar atentos às suas movimentações ao longo do tempo: acompanhamentos, auxílios e atividades realizadas, para executar o seu ponto de vista e trabalhar juntamente com os portadores da especialização intermediária, sendo, de fato, o líder que a Polícia Militar Revolução Contra o Crime precisa, ao formar executivos aptos para a continuidade da excelência buscada pela Especialização Intermediária[/font][/justify][/color][/td][/tr][/table][/td][/tr][/table]
+[table  style="z-index: 99;margin-top: -56px;top: 60px;right: -20px;position: relative;font-weight: 500;border-radius: 150px;width: 40%;float: left;overflow: hidden;" bgcolor="#1a560c"][tr][td style="overflow: hidden; padding: 2%"][font=Poppins][color=#FFFFFF][b]SENSO CRÍTICO[/b][/color][/font][/td][/tr][/table]
+[table  style="overflow: hidden; border-radius: 10px; width: 100%; margin: 0px auto; z-index: 1; position: relative;"][tr style="border: none !important;"][td style="border: none !important; padding: 1px; width: 100%;" bgcolor="#1a560c"][table  style="padding-top: 10px; font-weight: 500; border-radius: 10px 10px 10px 10px; width: 100%; overflow: hidden;" bgcolor="#162612"][tr][td style="overflow: hidden; padding-top: 35px;"][color=white][justify][font=Poppins]Como membro da Diretoria do Corpo Executivo, possui mais autonomia para integrar novos policiais no Corpo de Oficiais, tanto no Corpo Executivo como também no Corpo Militar e aplicar medidas administrativas caso haja escassez de policiais nessa posição hierárquica. No entanto, não é o suficiente apenas saber dessas responsabilidades: é crucial entender como executá-las. Isso requer um aspecto fundamental em qualquer oficial: o senso crítico. Seja para conduzir movimentações hierárquicas, como promoções ou punições, ou para realizar avaliações mensais e resoluções de casos, o senso crítico é essencial.
+
+O senso crítico significa a capacidade de questionar e analisar de forma racional e inteligente. A palavra "crítico" vem de origem grega como "kritikos", que significa "a capacidade de fazer julgamentos". Esse significado da origem grega, é o que deve ser colocado em pauta para os portadores da especialização avançada. A habilidade para realizar avaliações críticas é importante para qualquer policial, mas a partir de possuir a especialização avançada, eles têm que dominar proficientemente para as ações realizadas estarem condizentes com os documentos e uma avaliação minuciosa em aspecto de meritocracia (isso se envolver promoções ou benefícios).
+
+O senso crítico também é fundamental para as avaliações dos portadores da especialização intermediária ministradas pela Diretoria do Corpo Executivo, afinal, é a partir desta característica, que poderá dar um veredito e a pontuação apropriada mediante aos comentários que você julgou ser a influência de serem tais na sua concepção. É importante ser imparcial, fazer o balanço de pontos positivos e negativos e dar o resultado mediante a situação que seu subalterno apresenta.
+
+O diretor tem a responsabilidade de avaliar tudo que envolve o subalterno na especialização, em todos os aspectos. É preciso ter abundantemente todas as evidências, informações ou testemunhas que possam notabilizar a capacidade de algum aspecto do subalterno. Se há por qualquer falha, seja uma ou mais, para existir no subalterno e que essas precisam ser dominadas naquele cargo ou na especialização, automaticamente, não é apto para ascender de cargo ou de especialização, mesmo que haja aspectos deste que o destaque dos demais.
+
+Além disso, para evitar discordâncias de visões, não que deve ser influenciado para impedir a promoção ou avanço de especialização do seu subalterno, mas buscar o que outros superiores hierárquicos acham deste no turno que este subalterno escolheu no RCCSystem e se possuem provas de tais atos que podem ser obstáculos impeditivos para a ascensão. O portador da especialização avançada não deve tornar-se exclusivamente dependente de opiniões terceiras para decidir, deve confiar plenamente na sua capacidade de julgamento e analisar todas as informações que estão disponíveis à mercê do policial.
+
+O subalterno precisa estar apto quando for promovê-lo, para assumir as responsabilidades como oficial e não possuir brechas que podem ser usadas para finalidade de cancelamento de subida do grau hierárquico, afinal, é sua responsabilidade de evitar esse tipo de caso, caso contrário, poderá surtir consequências negativas ao seu subalterno, como a desmotivação ou perca da produtividade e esforço. É importante ressaltar que os critérios de promoção ou avanço de especialização devem ser cuidadosamente examinados e considerar todos os aspectos relevantes, mesmo que não sejam o fator primordial que desencadeou a promoção ou avanço. Essa abordagem visa reduzir a margem para interpretações ambíguas, como mencionado anteriormente, e garantirá a aceitação por parte daqueles que revisam os motivos pelos quais a promoção foi aprovada e avançou. Os motivos devem abordar desempenho nos grupos de tarefas, comportamento, características dos oficiais, conhecimento de documentos e outros elementos pertinentes – existem critérios a se avaliar para avanço de especialização no tópico [b][CE] Guia de Critérios e Avaliações[/b] no qual devem ler ele -.[/font][/justify][/color][/td][/tr][/table][/td][/tr][/table]`+f();}
+
+case 'analiseneg':{
+const mot=$('#f-motneg').value.trim();
+return h('CARTA DE ANÁLISE NEGADA')+s(nick)+`Por meio desta Mensagem Privada, informo-lhe que sua solicitação de análise de avanço foi [b][color=#65b026]negada devido à ausência de um ou mais dos requisitos obrigatórios[/color][/b] para a solicitação ser considerada para análise. No seu caso, a problemática foi devido exposto abaixo:
+
+[center][table style='margin-bottom: 9px;width: 100%;max-width: 100%;padding: 0;line-height: 0;border: none!important;box-shadow: 0 0 0 1px #65b026;border-radius: 150px!important;position: relative;z-index: 0;top: -5px;'][tr style='border: none!important;'][td style=' border: none!important;'][left]
+ ${mot}.[/left][/td][/tr][/table][/center]
+Quando todos os requisitos forem sanados e após o prazo de 7 dias contados do envio desta mensagem privada, você poderá solicitar novamente a análise para a Diretoria do Corpo Executivo.[/justify][/font][/color]`+f();}
+
+case 'analiseind':{
+const blocos=VL.map(v=>{
+const cor=v.tipo==='deferido'?'green':'red';
+const lbl=v.tipo==='deferido'?'<i class="fas fa-check"></i> DEFERIDO':'<i class="fas fa-times"></i> INDEFERIDO';
+const av=`https://www.habbo.com.br/habbo-imaging/avatarimage?img_format=png&user=${encodeURIComponent(v.dir||'Aloscon')}&direction=2&head_direction=2&size=m&headonly=1`;
+return `[table style="width: 80px; border-radius: 5px!Important; overflow: hidden;border: none !important; border-radius: 5px; padding-top: 10px;position: relative;top: 2.4em; left: 4.5em;margin: -3em; display: ruby-text; z-index: 10;" bgcolor="${cor}"][tr style="overflow: hidden; border: none!important;"][td style="overflow: hidden; border: none!important; padding-top: 25px;"][color=white]${lbl}[/color][/td][/tr][/table]
+[table style="overflow: hidden; border: none!important; box-shadow: 0 0 0 1px ${cor}; border-radius: 5px!Important;"][tr style="overflow: hidden; border: none!important; border-radius: 5px!important;"][td style="overflow: hidden; border: none!important;"]
+
+[table style='z-index: 999;margin-top: -67px;width: max-content;position: relative;overflow: hidden;border: none!important;border-radius: 15px!important;padding: 0;top: 40px;' bgcolor='${cor}'][tr style='border: none!important; overflow: hidden;'][td style='border: none!important; padding: 0;'][center][img]${av}[/img][/center][/td][/tr][/table]
+[table style='margin-bottom: 9px;width: max-content;max-width: 100%;padding: 0;line-height: 0;border: none!important;box-shadow: 0 0 0 1px ${cor};border-radius: 150px!important;position: relative;z-index: 0;left: 42px;top: -20px; margin-bottom: -31px;'][tr style='border: none!important;'][td style=' border: none!important;'][left][b]Diretor(a)[/b] ${v.dir||'—'}[/left][/td][/tr][/table]
+
+[justify]${v.com||'—'}[/justify][/td][/tr][/table]`;}).join('\n');
+return h('CARTA DE ANÁLISE INDEFERIDA')+s(nick)+`Por meio desta Mensagem Privada, informo-lhe que sua solicitação de análise de avanço foi [b][color=#65b026]indeferida[/color][/b]. Em caso de insatisfação com o resultado, é possível protocolar recurso na Central de Sindicâncias para análise da Presidência do órgão ou recorrer diretamente à segunda instância. Seguem as análises abaixo, uma vez que a solicitação precisou ser apreciada por colegiado, devido à inexistência de diretores ativos no seu turno.[/justify][/font][/color]
+
+[table  style="z-index: 99;margin-top: -56px;top: 41px;right: -20px;position: relative;font-weight: 500;border-radius: 150px;width: 40%;float: left;overflow: hidden;" bgcolor="#1a560c"][tr][td style="overflow: hidden; padding: 2%"][font=Poppins][color=#FFFFFF][b]EXPOSIÇÃO DE ANÁLISES[/b][/color][/font][/td][/tr][/table][table  style="overflow: hidden; border-radius: 10px; width: 100%; margin: 0px auto; z-index: 1; position: relative;"][tr style="border: none !important;"][td style="border: none !important; padding: 1px; width: 100%;" bgcolor="#1a560c"][table  style="padding-top: 10px; font-weight: 500; border-radius: 10px 10px 10px 10px; width: 100%; overflow: hidden;" bgcolor="#162612"][tr][td style="overflow: hidden; padding-top: 25px;"][color=white][justify][font=Poppins]${blocos}[/font][/justify][/color][/td][/tr][/table][/td][/tr][/table]`+f();}
+
+case 'regresso':{
+const esp=gR('espreg'),mot=$('#f-motreg').value.trim(),orig=gR('origreg'),lk=$('#f-linkreg').value.trim();
+const lnkB=orig==='outro'&&lk?`\n[url=${lk}][table  style="z-index: 99;margin-top: -53px;top: 10px;right: 30px;position: relative;font-weight: 500;border-radius: 150px;width: 40%;float: right;overflow: hidden;" bgcolor="#247411"][tr][td style="overflow: hidden;padding: 4%;"][font=Poppins][color=white][b]ANEXOS[/b][/color][/font][/td][/tr][/table][/url]`:'';
+const frAv=orig==='avaliacao'?'\nA fundamentação do seu regresso, de forma mais detalhada, decorre do resultado da Avaliação Mensal ou da Análise de Regresso, da qual você já está ciente, seja por meio da intimação recebida ou pelos comentários e vereditos divulgados na Central de Avaliações.\n':'';
+return h('CARTA DE REGRESSO DA ESPECIALIZAÇÃO')+s(nick)+`Por meio desta Mensagem Privada, informo-lhe, que você sofreu um regresso de especialização. Portanto, agora, você se torna portador da [b][color=#65b026]${esp}[/b][/color]. Nós, da Diretoria do Corpo Executivo, lamentamos o seu regresso e informamos que pode sempre contar conosco na busca por melhorias e no esclarecimento de dúvidas. Abaixo seguem os motivos expostos que levaram ao seu regresso.
+
+[center][table style='margin-bottom: 9px;width: 100%;max-width: 100%;padding: 0;line-height: 0;border: none!important;box-shadow: 0 0 0 1px #65b026;border-radius: 150px!important;position: relative;z-index: 0;top: -5px;'][tr style='border: none!important;'][td style=' border: none!important;'][left]
+ ${mot}.[/left][/td][/tr][/table][/center]
+${lnkB}${frAv}
+Se não concordar com o seu regresso, você poderá interpor recurso, acessando a [url=https://www.policiarcc.com/t38726-ce-central-de-sindicancias][b][color=#65b026][CE] Central de Sindicâncias.[/b][/color][/url][/justify][/font][/color]`+f();}
+
+case 'promocao':
+return h('CARTA DE PROMOÇÃO')+s(nick)+`Por meio desta Mensagem Privada, informo-lhe que você foi [b][color=#65b026]promovido[/b][/color] pela Diretoria do Corpo Executivo, em razão do veredito obtido na última avaliação mensal. Parabenizamos-lhe pela promoção, fruto de seu desempenho, dedicação e comprometimento com as atribuições exercidas, desejando-lhe êxito e continuidade no excelente trabalho desempenhado.
+
+Para consultar os fundamentos e os vereditos da referida avaliação, acesse o [url=https://www.policiarcc.com/t38299-diario-oficial-diretoria-resultado-da-avaliacao-quinzenal-de-especializacao-intermediaria][b][color=#65b026][Diário Oficial] - Diretoria: Resultado da Avaliação Mensal de Especialização Intermediária.[/b][/color][/url][/justify][/font][/color]`+f();
+
+default:return '';}}
+
+function buildBBG(form){switch(form){
+case 'melhores':{
+const pz=fmtD($('#f-prazomel').value);
+return gH('MELHORES DA QUINZENA')+gS('{USERNAME}')+`Por meio desta Mensagem Privada, informo-lhe, que a [b][color=#65b026]Diretoria do Corpo Executivo[/color][/b], anuncia mais uma vez a abertura das votações para os [b][color=#65b026]Melhores da Quinzena![/color][/b]. O prazo da votação vai até [b][color=#65b026]${pz}[/color][/b] às 23h59 no horário de Brasília.
+
+É importante que você vote com consciência e imparcialidade naquele que lhe apresenta ter um excelente trabalho. Uma gratificação importante está em suas mãos! Em caso de dúvidas, procure a Diretoria do Corpo Executivo.
+
+
+[table  style="margin-top: -35px; border: none !important;" ][tr  style="border: none !important;"][td  style="width: 40%; border: none !important;"][table  style="z-index: 99; margin-top: -45px; top: 30px; right: -20px;  position: relative; font-weight: 500; border-radius: 150px; width: 40%; float: left; overflow: hidden;" bgcolor="#1a560c"][tr][td style="overflow: hidden; padding: 2%"][font=Poppins][color=#FFFFFF][b]FORMULÁRIO DE VOTAÇÃO[/b][/color][/font][/td][/tr][/table]
+[table style=" border-radius: 10px; border: none !important;"][tr style="border: none !important;"][td style="border-radius: 10px; width: 40%; border: none !important; height: 63px;" bgcolor="#162612"][color=white][font=Poppins] Para votar nos Melhores Executivos da Quinzena, acesse o formulário abaixo.[/font][/color]
+[url=https://www.policiarcc.com/h353-dir-melhores-da-quinzena][table  style="z-index: 99;margin-top: -53px;top: 60px;right: 30px;position: relative;font-weight: 500;border-radius: 150px;width: 40%;float: right;overflow: hidden;" bgcolor="#247411"][tr][td style="overflow: hidden;padding: 4%;"][font=Poppins][color=white][b]CLIQUE AQUI[/b][/color][/font][/td][/tr][/table][/url][/td][/tr][/table][/td]
+
+[td  style="border: none !important; width: 40%;"]
+[table  style="z-index: 99; margin-top: -45px; top: 30px; right: -20px;  position: relative; font-weight: 500; border-radius: 150px; width: 40%; float: left; overflow: hidden;" bgcolor="#1a560c"][tr][td style="overflow: hidden; padding: 2%"][font=Poppins][color=#FFFFFF][b]NORMATIVAS E PRAZOS[/b][/color][/font][/td][/tr][/table]
+[table style=" border-radius: 10px; border: none !important;"][tr style="border: none !important;"][td style="border-radius: 10px; width: 40%; height: 63px; border: none !important;" bgcolor="#162612"]  [color=white][font=Poppins]Para saber mais como funciona a votação, acesse o tópico abaixo.[/font][/color]
+[url=https://www.policiarcc.com/t32828-rcc-votacao-dos-melhores-executivos-da-quinzena][table  style="z-index: 99;margin-top: -53px;top: 60px;right: 30px;position: relative;font-weight: 500;border-radius: 150px;width: 40%;float: right;overflow: hidden;" bgcolor="#247411"][tr][td style="overflow: hidden;padding: 4%;"][font=Poppins][color=white][b]CLIQUE AQUI[/b][/color][/font][/td][/tr][/table][/url][/td]
+[/tr][/table]
+[/td]
+[/tr][/table]
+[/justify][/font][/color]`+gF();}
+
+case 'escala':{
+const nks=(NS['escala']||[]).join(' / '),pz=fmtD($('#f-prazoesc').value);
+return gH('ESCALA DA ATIVIDADE QUINZENAL')+gS('{USERNAME}')+`Por meio desta Mensagem Privada, informo-lhe que você foi [b][color=#65b026]escalado[/b][/color] para a próxima atividade quinzenal, sendo responsável por planejá-la e executá-la.
+
+[b][color=#65b026]Grupo[/b][/color]: ${nks}
+
+Você deve seguir as diretrizes descritas no tópico [b][DIR] Manual de Funções das Atividades Quinzenais[/b], acessando-o por meio do link correspondente, [url=https://www.policiarcc.com/t38740-dir-manual-de-funcoes-das-atividades-quinzenais#1675968][b][color=#65b026]clicando aqui[/b][/color][/url]
+
+O documento de planejamento da atividade, parcialmente preenchido, deve ser entregue à Presidência até 72 horas após o envio desta mensagem privada, ou seja, até [b][color=#65b026]${pz}[/b][/color], às 23h59.
+
+Entende-se por parcialmente preenchido um documento que contenha, no mínimo, as seguintes informações: data e horário previstos da atividade, escala de funções, metodologia da atividade quinzenal, roteiro, entre outros pontos essenciais para sua execução.
+
+O não cumprimento do prazo implicará [b][color=#65b026]advertência interna[/color][/b] a todos os responsáveis escalados, conforme previsto, pelo crime de Abandono de Dever/Negligência.[/justify][/font][/color]`+gF();}
+
+case 'bloqueadas':{
+const lista=(NS['bloqueadas']||[]).join('\n');
+return gH('PROMOÇÕES BLOQUEADAS')+gS('{USERNAME}')+`Por meio desta Mensagem Privada, informo-lhe, que os seguintes portadores da especialização intermediária [b][color=#65b026]não poderão ser promovidos até segunda ordem[/color][/b]. Essa medida visa preservar a integridade das avaliações realizadas pelo órgão, que estão prestes a ocorrer, e evitar qualquer interferência externa. Segue a lista de policiais que a promoção está bloqueada durante a avaliação:
+
+${lista}
+
+Promoções que envolvam policiais mencionados acima com a especialização intermediária serão canceladas caso sejam realizadas após o envio desta mensagem privada, e o responsável pelo requerimento poderá ser [b][color=#65b026]punido[/color][/b] pelo crime de [b][color=#65b026]Abandono de Dever/Negligência[/color][/b]. Em caso de dúvidas, entre em contato com a Diretoria do Corpo Executivo.[/justify][/font][/color]`+gF();}
+
+case 'desbloqueadas':
+return gH('PROMOÇÕES DESBLOQUEADAS')+gS('{USERNAME}')+`Por meio desta Mensagem Privada, informo-lhe, que as promoções dos portadores da especialização intermediária [b][color=#65b026]agora podem ser realizadas após o fim do período avaliativo[/color][/b]. Caso algum executivo avaliado se sinta lesionado com a nota, o veredito ou os comentários recebidos em suas avaliações, deverá interpor recurso. Para isso, acesse a [url=https://www.policiarcc.com/t38726-ce-central-de-sindicancias][b][color=#65b026][CE] Central de Sindicâncias[/color][/b][/url].
+
+A leitura das avaliações realizadas pela Diretoria do Corpo Executivo é essencial quando se tratar de subalternos com especialização intermediária, especialmente para embasar decisões sobre promoções ou outras ações relevantes. Além disso, caso você seja um dos avaliados, é importante analisar atentamente os comentários recebidos, a fim de identificar eventuais deficiências e corrigi-las. Resultados das avaliações se encontram no [Diário Oficial] - Diretoria: Avaliações, tendo o seu acesso rápido abaixo:
+
+[center][table  style="width: 70%;margin-top: -15px; border: none !important;" ][tr  style="border: none !important;"][td  style="width: 60%; border: none !important;"][table  style="z-index: 99; margin-top: -45px; top: 45px; right: -20px;  position: relative; font-weight: 500; border-radius: 150px; width: 60%; float: left; overflow: hidden;" bgcolor="#1a560c"][tr][td style="overflow: hidden; padding: 2%"][font=Poppins][color=#FFFFFF][b]RESULTADO DA AVALIAÇÃO MENSAL[/b][/color][/font][/td][/tr][/table]
+[table style=" border-radius: 10px; border: none !important;"][tr style="border: none !important;"][td style="border-radius: 10px; border: none !important; height: 63px;" bgcolor="#162612"][color=white][font=Poppins]Para ver os resultados, acesse o tópico abaixo.[/font][/color]
+[url=https://www.policiarcc.com/t38299-diario-oficial-diretoria-resultado-da-avaliacao-quinzenal-de-especializacao-intermediaria][table  style="z-index: 99;margin-top: -53px;top: 60px;right: 30px;position: relative;font-weight: 500;border-radius: 150px;width: 40%;float: right;overflow: hidden;" bgcolor="#247411"][tr][td style="overflow: hidden;padding: 4%;"][font=Poppins][color=white][b]CLIQUE AQUI[/b][/color][/font][/td][/tr][/table][/url][/td][/tr][/table][/td]
+[/tr][/table][/center][/justify][/font][/color]`+gF();
+
+case 'atividade':{
+const dt=fmtD($('#f-dtatv').value),hBR=$('#f-hbratv').value,hPT=$('#f-hptatv').value;
+return gH('ATIVIDADE QUINZENAL')+gS('{USERNAME}')+`Por meio desta Mensagem Privada, informo que a [b][color=#65b026]Diretoria do Corpo Executivo[/color][/b], informa que no dia [b][color=#65b026]${dt}, às ${hBR} BR / ${hPT} PT[/color][/b], será realizada a atividade quinzenal obrigatória destinada a todos os [b][color=#65b026]portadores da Especialização Intermediária[/color][/b].
+
+Os executivos que não puderem comparecer deverão [b][color=#65b026]justificar obrigatoriamente[/color][/b] sua ausência em até [b][color=#65b026]24 horas após a data e o horário de início da atividade[/color][/b]. Caso contrário, estarão sujeitos a receber uma [b][color=#65b026]advertência escrita[/color][/b] pelo crime de [b][color=#65b026]Abandono de Dever/Negligência[/color][/b].
+
+[center][table  style="width: 70%;margin-top: -15px; border: none !important;" ][tr  style="border: none !important;"][td  style="width: 60%; border: none !important;"][table  style="z-index: 99; margin-top: -45px; top: 45px; right: -20px;  position: relative; font-weight: 500; border-radius: 150px; width: 60%; float: left; overflow: hidden;" bgcolor="#1a560c"][tr][td style="overflow: hidden; padding: 2%"][font=Poppins][color=#FFFFFF][b]CENTRAL DE JUSTIFICATIVAS[/b][/color][/font][/td][/tr][/table]
+[table style=" border-radius: 10px; border: none !important;"][tr style="border: none !important;"][td style="border-radius: 10px; border: none !important; height: 63px;" bgcolor="#162612"][color=white][font=Poppins]Para justificar a sua falta, acesse o tópico abaixo.[/font][/color]
+[url=https://www.policiarcc.com/t38734-ce-justificativas][table  style="z-index: 99;margin-top: -53px;top: 60px;right: 30px;position: relative;font-weight: 500;border-radius: 150px;width: 40%;float: right;overflow: hidden;" bgcolor="#247411"][tr][td style="overflow: hidden;padding: 4%;"][font=Poppins][color=white][b]CLIQUE AQUI[/b][/color][/font][/td][/tr][/table][/url][/td][/tr][/table][/td]
+[/tr][/table][/center][/justify][/font][/color]`+gF();}
+
+case 'atualizacao':
+return gH('ATUALIZAÇÃO DA ESCALA DE FUNÇÕES')+gS('{USERNAME}')+`Por meio desta Mensagem Privada, informo-lhe, que a escala de funções foi [b][color=#65b026]atualizada[/color][/b]. Verifique sua função para a realização das atividades programadas e consulte sempre os manuais referentes às suas atribuições. Em caso de dúvidas, procure os Secretários ou a Presidência do órgão.
+
+[center][table  style="width: 70%;margin-top: -15px; border: none !important;" ][tr  style="border: none !important;"][td  style="width: 60%; border: none !important;"][table  style="z-index: 99; margin-top: -45px; top: 45px; right: -20px;  position: relative; font-weight: 500; border-radius: 150px; width: 60%; float: left; overflow: hidden;" bgcolor="#1a560c"][tr][td style="overflow: hidden; padding: 2%"][font=Poppins][color=#FFFFFF][b]ESCALA DE FUNÇÕES[/b][/color][/font][/td][/tr][/table]
+[table style=" border-radius: 10px; border: none !important;"][tr style="border: none !important;"][td style="border-radius: 10px; border: none !important; height: 63px;" bgcolor="#162612"][color=white][font=Poppins]Para visualizar a escala de funções, acesse a planilha abaixo.[/font][/color]
+[url=https://docs.google.com/spreadsheets/d/1GYUxpAR2QHpKfR5fVocE9he2c-Pm3INuU-vlMVAjS5U/edit?gid=1028543101#gid=1028543101][table  style="z-index: 99;margin-top: -53px;top: 60px;right: 30px;position: relative;font-weight: 500;border-radius: 150px;width: 40%;float: right;overflow: hidden;" bgcolor="#247411"][tr][td style="overflow: hidden;padding: 4%;"][font=Poppins][color=white][b]CLIQUE AQUI[/b][/color][/font][/td][/tr][/table][/url][/td][/tr][/table][/td]
+[/tr][/table][/center][/justify][/font][/color]`+gF();
+
+case 'avmensal':{
+const pz=fmtD($('#f-prazoavm').value);
+return gH('AVALIAÇÃO MENSAL DA ESPECIALIZAÇÃO INTERMEDIÁRIA')+gS('{USERNAME}')+`Por meio desta Mensagem Privada, informo-lhe, que está aberto o [b][color=#65b026]formulário de avaliação mensal[/color][/b] dos [b][color=#65b026]oficiais do Corpo Executivo[/color][/b] que possuem [b][color=#65b026]Especialização Intermediária[/color][/b], os quais estão divididos entre turnos. É [b][color=#65b026]dever[/color][/b] de todos os oficiais executivos aptos a avaliar e estão ativos, com exceção daqueles que estão isentos [b][color=#65b026]de acordo[/color][/b] com as normativas presentes no tópico [url=https://www.policiarcc.com/t38732-ce-regulamento-de-avaliacoes][b][color=#65b026][CE] Regulamento de Avaliações[/color][/b][/url], responder à avaliação.
+
+Além disso, é importante ler o tópico a seguir, o [url=https://www.policiarcc.com/t39107-ce-guia-de-criterios-e-avaliacoes][b][color=#65b026][CE] Guia de Critérios e Avaliações[/color][/b][/url], que servirá como base inicial para definir o que cobrar de cada executivo, bem como orientar sobre como avaliar, atribuir notas e emitir vereditos coerentes. Está passível de punição, [b]conforme a gravidade[/b], o oficial executivo que:
+
+[table style="width: 20px; display: math; position: relative; border-radius: 5px; border: none!Important; padding-top: 12px; top: 8px;" bgcolor="#65b026"][tr style="border: none!Important; overflow: hidden;"][td style="border:  none!Important; overflow: hidden;"][color=white][b]01[/b][/color][/td][/tr][/table] Não responder à avaliação até o dia [b]${pz} às 23h59 (horário de Brasília)[/b], sujeito à advertência escrita;
+[table style="width: 20px; display: math; position: relative; border-radius: 5px; border: none!Important; padding-top: 12px; top: 8px;" bgcolor="#65b026"][tr style="border: none!Important; overflow: hidden;"][td style="border:  none!Important; overflow: hidden;"][color=white][b]02[/b][/color][/td][/tr][/table] [b]Falsificar informações[/b] no formulário, seja tal realizado de [b]forma intencional[/b] ou com base numa avaliação realizada de [b]forma rasa[/b], sujeito às sanções penais;
+[table style="width: 20px; display: math; position: relative; border-radius: 5px; border: none!Important; padding-top: 12px; top: 8px;" bgcolor="#65b026"][tr style="border: none!Important; overflow: hidden;"][td style="border:  none!Important; overflow: hidden;"][color=white][b]03[/b][/color][/td][/tr][/table] Sair em licença [b]após o recebimento[/b] desta Mensagem Privada, sem ter a [b]dispensa da Presidência da Diretoria[/b] para responder à avaliação, sujeito a advertência escrita;
+[table style="width: 20px; display: math; position: relative; border-radius: 5px; border: none!Important; padding-top: 12px; top: 8px;" bgcolor="#65b026"][tr style="border: none!Important; overflow: hidden;"][td style="border:  none!Important; overflow: hidden;"][color=white][b]04[/b][/color][/td][/tr][/table] [b]Deixar de avaliar[/b] algum executivo que esteja nos [b]parâmetros expostos no formulário da avaliação[/b], sujeito ao recebimento de 50 medalhas negativas efetivas por executivo não avaliado.
+
+[center][table  style="width: 70%;margin-top: -15px; border: none !important;" ][tr  style="border: none !important;"][td  style="width: 60%; border: none !important;"][table  style="z-index: 99; margin-top: -45px; top: 45px; right: -20px;  position: relative; font-weight: 500; border-radius: 150px; width: 60%; float: left; overflow: hidden;" bgcolor="#1a560c"][tr][td style="overflow: hidden; padding: 2%"][font=Poppins][color=#FFFFFF][b]FORMULÁRIO DE AVALIAÇÃO MENSAL[/b][/color][/font][/td][/tr][/table]
+[table style=" border-radius: 10px; border: none !important;"][tr style="border: none !important;"][td style="border-radius: 10px; border: none !important; height: 63px;" bgcolor="#162612"][color=white][font=Poppins]Para acessar as informações sobre e o formulário de avaliação, acesse o tópico abaixo.[/font][/color]
+[url=https://www.policiarcc.com/t39109-dir-avaliacao-quinzenal-da-especializacao-intermediaria][table  style="z-index: 99;margin-top: -53px;top: 60px;right: 30px;position: relative;font-weight: 500;border-radius: 150px;width: 40%;float: right;overflow: hidden;" bgcolor="#247411"][tr][td style="overflow: hidden;padding: 4%;"][font=Poppins][color=white][b]CLIQUE AQUI[/b][/color][/font][/td][/tr][/table][/url][/td][/tr][/table][/td]
+[/tr][/table][/center][/justify][/font][/color]`+gF();}
+
+case 'reuniao':{
+const dest=gR('destreu'),conv=gR('convreu'),dt=fmtD($('#f-dtreu').value),hBR=$('#f-hbrreu').value,hPT=$('#f-hptreu').value;
+const dMap={corpo:'membros do Corpo Executivo',intermediaria:'portadores da Especialização Intermediária',diretoria:'membros da Diretoria do Corpo Executivo'};
+const frObr=dest==='corpo'?'Vale ressaltar que a presença por parte dos portadores da Especialização Intermediária e Avançada é obrigatória nesta reunião geral.':dest==='intermediaria'?'Vale ressaltar que a presença por parte dos portadores da Especialização Intermediária é obrigatória nesta reunião geral.':'Vale ressaltar que a presença por parte dos diretores é obrigatória nesta reunião geral.';
+const punTipo=dest==='diretoria'?'advertência interna':'advertência escrita';
+return gH('REUNIÃO GERAL')+gS('{USERNAME}')+`Por meio desta Mensagem Privada, informo-lhe, que a [b][color=#65b026]${conv}[/color][/b], informa que no dia [b][color=#65b026]${dt}, às ${hBR} BR / ${hPT} PT[/color][/b], será realizada a reunião geral destinada a todos os [b][color=#65b026]${dMap[dest]||dest}[/color][/b]. ${frObr}
+
+Os executivos que não puderem comparecer deverão [b][color=#65b026]justificar obrigatoriamente[/color][/b] sua ausência em até [b][color=#65b026]24 horas após a data e o horário de início da reunião[/color][/b]. Caso contrário, estarão sujeitos a receber uma [b][color=#65b026]${punTipo}[/color][/b] pelo crime de [b][color=#65b026]Abandono de Dever/Negligência[/color][/b].
+
+[center][table  style="width: 70%;margin-top: -15px; border: none !important;" ][tr  style="border: none !important;"][td  style="width: 60%; border: none !important;"][table  style="z-index: 99; margin-top: -45px; top: 45px; right: -20px;  position: relative; font-weight: 500; border-radius: 150px; width: 60%; float: left; overflow: hidden;" bgcolor="#1a560c"][tr][td style="overflow: hidden; padding: 2%"][font=Poppins][color=#FFFFFF][b]CENTRAL DE JUSTIFICATIVAS[/b][/color][/font][/td][/tr][/table]
+[table style=" border-radius: 10px; border: none !important;"][tr style="border: none !important;"][td style="border-radius: 10px; border: none !important; height: 63px;" bgcolor="#162612"][color=white][font=Poppins]Para justificar a sua falta, acesse o tópico abaixo.[/font][/color]
+[url=https://www.policiarcc.com/t38734-ce-justificativas][table  style="z-index: 99;margin-top: -53px;top: 60px;right: 30px;position: relative;font-weight: 500;border-radius: 150px;width: 40%;float: right;overflow: hidden;" bgcolor="#247411"][tr][td style="overflow: hidden;padding: 4%;"][font=Poppins][color=white][b]CLIQUE AQUI[/b][/color][/font][/td][/tr][/table][/url][/td][/tr][/table][/td]
+[/tr][/table][/center][/justify][/font][/color]`+gF();}
+
+case 'coleta':{
+const pz=fmtD($('#f-prazocol').value),hr=$('#f-horacol').value||'22:00';
+return gH('COLETA DE HORÁRIOS')+gS('{USERNAME}')+`Por meio desta Mensagem Privada, lhe informamos que todos os portadores de Especialização Intermediária e Especialização Avançada devem atualizar os seus horários, se necessário, no site anexado, referente à Coleta de Horários, disponível ao final desta mensagem privada. O prazo para envio das respostas é até [b]${pz} ${hr} (horário de Brasília).[/b]
+
+
+[table  style="z-index: 99; margin-top: -45px; top: 30px; right: -20px;  position: relative; font-weight: 500; border-radius: 150px; width: 40%; float: left; overflow: hidden;" bgcolor="#1a560c"][tr][td style="overflow: hidden; padding: 2%"][font=Poppins][color=#FFFFFF][b]FUNCIONAMENTO DA COLETA DE HORÁRIOS[/b][/color][/font][/td][/tr][/table]
+[table  style="overflow: hidden; border-radius: 10px; width: 100%; margin: 0px auto; z-index: 1; position: relative;"][tr style="border: none !important;"][td style="border: none !important; padding: 1px; width: 100%;" bgcolor="#1a560c"][table  style="padding-top: 10px; font-weight: 500; border-radius: 10px 10px 10px 10px; width: 100%; overflow: hidden;" bgcolor="#162612"][tr][td style="overflow: hidden; padding-top: 35px;"][color=white][justify][font=Poppins]O policial que responder à Coleta de Horários antes da avaliação, será avaliado exclusivamente acerca das informações dispostas. A avaliação será conduzida por Diretores e avaliadores portadores da especialização intermediária que atuem nos mesmos turnos, observando que:
+
+[b]a)[/b] Avaliadores que [b]compartilhem[/b] horários com o policial poderão [b]julgar[/b] a sua presença na base.
+[b]b)[/b] Avaliadores que [b]não compartilhem horários[/b] com o policial não poderão comentar [b]negativamente[/b] sobre sua presença na base, mas [b]o avaliarão normalmente[/b].
+
+O policial que [b]não responder à Coleta de Horários[/b] será considerado presente em todos os seus turnos informados no RCCSystem [b]integralmente[/b] e avaliado por todos os avaliadores do(s) turno(s) correspondente(s), incluindo [b]a presença na base[/b].[/font][/justify][/color][/td][/tr][/table][/td][/tr][/table]
+
+
+[table  style="margin-top: -35px; border: none !important;" ][tr  style="border: none !important;"][td  style="width: 40%; border: none !important;"][table  style="z-index: 99; margin-top: -45px; top: 30px; right: -20px;  position: relative; font-weight: 500; border-radius: 150px; width: 40%; float: left; overflow: hidden;" bgcolor="#1a560c"][tr][td style="overflow: hidden; padding: 2%"][font=Poppins][color=#FFFFFF][b]COLETA DE HORÁRIOS[/b][/color][/font][/td][/tr][/table][table style=" border-radius: 10px; border: none !important;"][tr style="border: none !important;"][td style="border-radius: 10px; width: 40%; border: none !important; height: 63px;" bgcolor="#162612"][color=white][font=Poppins]Para atualizar/registrar seus horários ou consultar, acesse o site abaixo.[/font][/color]
+[url=https://www.policiarcc.com/h352-dir-coleta-de-horarios][table  style="z-index: 99;margin-top: -53px;top: 60px;right: 30px;position: relative;font-weight: 500;border-radius: 150px;width: 40%;float: right;overflow: hidden;" bgcolor="#247411"][tr][td style="overflow: hidden;padding: 4%;"][font=Poppins][color=white][b]CLIQUE AQUI[/b][/color][/font][/td][/tr][/table][/url][/td][/tr][/table][/td][/tr][/table][/justify][/font][/color]`+gF();}
+
+case 'abertura':{
+const tipAb=gR('tipab'),cargo=$('#f-cargoab').value,nks=NS['abertura']||[],nickAb=nks[0]||'—',pz=fmtD($('#f-prazoab').value),hr=$('#f-horaab').value,lk=$('#f-linkab').value.trim();
+const frReg=tipAb==='regresso'?'\nRessalta-se que, por se tratar de um regresso, é indispensável a manutenção do decoro, sendo expressamente vedado comentar o caso com demais diretores.':'';
+return gH('CARTA DE ABERTURA DE ANÁLISE')+gS('{USERNAME}')+`Por meio desta mensagem privada, informo que foi aberta uma análise na [b][color=#65b026][DIR] Central de Especializações.[/color][/b] As informações correspondentes seguem anexas abaixo para conhecimento e no aguardo de sua resposta quanto à análise, caso esteja ativo no momento. Desconsidere esta mensagem caso se encontre de licença no órgão no momento do recebimento.[/justify][/font][/color]
+
+[table  style="z-index: 99; margin-top: -55px; top: 30px; right: -20px;  position: relative; font-weight: 500; border-radius: 150px; width: 40%; float: left; overflow: hidden;" bgcolor="#1a560c"][tr][td style="overflow: hidden; padding: 2%"][font=Poppins][color=#FFFFFF][b]ANÁLISE DE ${tipAb.toUpperCase()}[/b][/color][/font][/td][/tr][/table][table  style="overflow: hidden; border-radius: 10px; width: 100%; margin: 0px auto; z-index: 1; position: relative;"][tr style="border: none !important;"][td style="border: none !important; padding: 1px; width: 100%;" bgcolor="#1a560c"][table  style="padding-top: 10px; font-weight: 500; border-radius: 10px 10px 10px 10px; width: 100%; overflow: hidden;" bgcolor="#162612"][tr][td style="overflow: hidden; padding-top: 35px;"][color=white][justify][font=Poppins]A análise de [b][color=#65b026]${tipAb}[/color][/b] refere-se ao [b][color=#65b026]${cargo} ${nickAb}[/color][/b] e permanecerá aberta até [b][color=#65b026]${pz}[/color][/b], às [b][color=#65b026]${hr}[/color][/b], aguardando sua manifestação no respectivo tópico, por meio do botão de acesso abaixo.${frReg} O descumprimento do prazo estabelecido para resposta poderá acarretar [b][color=#65b026]advertência interna[/color][/b], enquadrada como [b][color=#65b026]Abandono de Dever/Negligência[/color][/b].
+[/font][/justify][/color][/td][/tr][/table][/td][/tr][/table]
+[url=${lk}][table  style="z-index: 99;margin-top: -53px;top: 10px;right: 30px;position: relative;font-weight: 500;border-radius: 150px;width: 40%;float: right;overflow: hidden;" bgcolor="#247411"][tr][td style="overflow: hidden;padding: 4%;"][font=Poppins][color=white][b]CLIQUE AQUI[/b][/color][/font][/td][/tr][/table][/url]`+gF();}
+
+default:return '';}}
+
+// ============================================================
+// SISTEMA DE ENVIO — fetch + URLSearchParams (padrão do sistema
+// individual/grupo do código antigo, sem jQuery)
+// ============================================================
+
+async function sendMP(username,subject,message){
+  const r=await fetch('/privmsg',{
+    method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    credentials:'include',
+    body:new URLSearchParams({folder:'inbox',mode:'post',post:'1',username:username,subject,message})
+  });
+  if(!r.ok)throw new Error('Falha no envio');
+  return true;
+}
+
+async function sendMPGroup(groupId,subject,message){
+  const r=await fetch('/privmsg',{
+    method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    credentials:'include',
+    body:new URLSearchParams({folder:'inbox',mode:'post',post:'1',usergroup:String(groupId),subject,message})
+  });
+  if(!r.ok)throw new Error('Falha no envio');
+  return true;
+}
+
+function initP(f,total){const p=$(`#pg-${f}`);p.classList.add('on');$(`#lg-${f}`).innerHTML='';$(`#sm-${f}`).classList.remove('on');$(`#pb-${f}`).style.width='0%';$(`#pc-${f}`).textContent=`0/${total}`;}
+function addLog(f,nick,st,msg){const log=$(`#lg-${f}`);const av=`${AV}?img_format=png&user=${encodeURIComponent(nick)}&direction=2&head_direction=2&size=m&headonly=1`;const d=document.createElement('div');d.className='li';d.innerHTML=`<div class="lav"><img src="${av}" loading="lazy"></div><span class="lnk">${esc(nick)}</span><span class="lst ${st}">${msg}</span>`;log.appendChild(d);log.scrollTop=log.scrollHeight;}
+function updLog(f,nick,st,msg){const items=[...document.querySelectorAll(`#lg-${f} .li`)];const item=items.find(i=>i.querySelector('.lnk')?.textContent===nick);if(item){const s=item.querySelector('.lst');s.className=`lst ${st}`;s.textContent=msg;}}
+function updBar(f,done,total){$(`#pb-${f}`).style.width=`${Math.round((done/total)*100)}%`;$(`#pc-${f}`).textContent=`${done}/${total}`;}
+function showSum(f,ok,er){const s=$(`#sm-${f}`);s.classList.add('on');s.innerHTML=`<div class="ss"><div class="sn g">${ok}</div><div class="sl">enviados</div></div><div class="ss"><div class="sn r">${er}</div><div class="sl">erros</div></div><div class="ss"><div class="sn">${ok+er}</div><div class="sl">total</div></div>`;}
+function validate(f){const nks=NS[f]||[];const pessoais=['intimacao','transparencia','punicao','observacao','avanco','analiseneg','analiseind','regresso','promocao'];if(pessoais.includes(f)&&nks.length===0){toast('Adicione ao menos um nickname.','e');return false;}if(f==='intimacao'&&!$('#f-motint').value.trim()){toast('Informe os motivos.','e');return false;}if(f==='transparencia'&&(!$('#f-apelante').value.trim()||!$('#f-codigo').value.trim()||!$('#f-reus').value.trim()||!$('#f-acusacao').value.trim()||!$('#f-defesa').value.trim()||!$('#f-fundtransp').value.trim())){toast('Preencha todos os campos.','e');return false;}if(f==='punicao'){if(!$('#f-crime').value.trim()||!$('#f-fundpun').value.trim()){toast('Preencha crime e fundamentação.','e');return false;}if(['advertência interna','advertência verbal','advertência escrita'].includes(gR('tippun'))&&!$('#f-dtadv').value){toast('Informe a data de início.','e');return false;}}if(f==='analiseneg'&&!$('#f-motneg').value.trim()){toast('Informe o motivo.','e');return false;}if(f==='analiseind'&&VL.length===0){toast('Adicione ao menos um voto.','e');return false;}if(f==='regresso'&&!$('#f-motreg').value.trim()){toast('Informe o motivo.','e');return false;}if(f==='melhores'&&!$('#f-prazomel').value){toast('Informe o prazo.','e');return false;}if(f==='escala'&&((NS['escala']||[]).length===0||!$('#f-prazoesc').value)){toast('Nicknames e prazo obrigatórios.','e');return false;}if(f==='bloqueadas'&&(NS['bloqueadas']||[]).length===0){toast('Adicione os nicknames.','e');return false;}if(f==='atividade'&&(!$('#f-dtatv').value||!$('#f-hbratv').value||!$('#f-hptatv').value)){toast('Preencha data e horários.','e');return false;}if(f==='avmensal'&&!$('#f-prazoavm').value){toast('Informe o prazo.','e');return false;}if(f==='reuniao'&&(!$('#f-dtreu').value||!$('#f-hbrreu').value||!$('#f-hptreu').value)){toast('Preencha data e horários.','e');return false;}if(f==='coleta'&&!$('#f-prazocol').value){toast('Informe o prazo.','e');return false;}if(f==='abertura'&&((NS['abertura']||[]).length===0||!$('#f-prazoab').value||!$('#f-horaab').value||!$('#f-linkab').value.trim())){toast('Preencha todos os campos.','e');return false;}return true;}
+
+// Envio INDIVIDUAL — um por um, MP personalizada por nick, anti-flood 800ms
+async function send(f){
+  if(lock){toast('Aguarde o envio atual.','e');return;}
+  if(!validate(f))return;
+  lock=true;
+  const nks=(NS[f]||[]).map(n=>sanitizeNick(n)).filter(Boolean);
+  initP(f,nks.length);
+  let ok=0,er=0;
+  for(let i=0;i<nks.length;i++){
+    const n=nks[i];
+    addLog(f,n,'sd','Enviando…');
+    try{
+      await sendMP(n,SB[f],buildBB(f,n));
+      updLog(f,n,'ok','✓ Enviado');ok++;
+    }catch{
+      updLog(f,n,'er','✗ Erro');er++;
+    }
+    updBar(f,i+1,nks.length);
+    if(i<nks.length-1)await sleep(800);
+  }
+  showSum(f,ok,er);
+  lock=false;
+  toast(er===0?`✓ ${ok} MP(s) enviada(s)!`:`${ok} ok · ${er} erros`,er===0?'s':'e');
+}
+
+function getGrupos(f){if(f==='reuniao'){const dv=gRG('rg-destreu');return dv==='corpo'?[268,146]:dv==='intermediaria'?[268]:[146];}return CFG.grupos[f]||[];}
+
+// Envio para GRUPOS — via usergroup (mesmo padrão do send_MPGroupMulti), anti-flood 800ms
+async function sendG(f){
+  if(lock){toast('Aguarde o envio atual.','e');return;}
+  if(!validate(f))return;
+  lock=true;
+  const pg=$(`#pg-${f}`);pg.classList.add('on');
+  $(`#lg-${f}`).innerHTML='';$(`#sm-${f}`).classList.remove('on');
+  $(`#pb-${f}`).style.width='0%';$(`#pc-${f}`).textContent='Enviando…';
+  const grupos=getGrupos(f);
+  const msg=buildBBG(f);
+  let ok=0,er=0;
+  for(let i=0;i<grupos.length;i++){
+    const gid=grupos[i];const label=`Grupo ${gid}`;
+    addLog(f,label,'sd','Enviando…');
+    try{
+      await sendMPGroup(gid,SB[f],msg);
+      updLog(f,label,'ok','✓ Enviado');ok++;
+    }catch{
+      updLog(f,label,'er','✗ Erro');er++;
+    }
+    updBar(f,i+1,grupos.length);
+    if(i<grupos.length-1)await sleep(800);
+  }
+  showSum(f,ok,er);
+  lock=false;
+  toast(ok===grupos.length?`✓ Enviado para ${ok} grupo(s)!`:`${ok} ok · ${er} erros`,ok===grupos.length?'s':'e');
+}
+
+popSel();bootstrap();
